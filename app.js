@@ -8744,11 +8744,11 @@ const participantsDatabase = {
     "evenements": [
       {
         "nom": "Conference cloture",
-        "horaire": "Samedi 17h"
+        "horaire": "Samedi 16h30"
       },
 	   {
         "nom": "Conference cloture",
-        "horaire": "Samedi 17h"
+        "horaire": "Samedi 16h30"
       }
     ]
   },
@@ -9390,10 +9390,13 @@ async function autoValidateCurrentEvents(participantId) {
         }
     }
     
+    // Compter le nombre total de places validées après l'auto-validation
+    const totalValidated = countValidatedEvents(participantId);
+    
     if (validatedCount > 0) {
-        // Mettre à jour l'affichage avec le nouveau total
-        const totalValidated = countValidatedEvents(participantId);
-        showScanResult(`${validatedCount} événement(s) auto-validé(s) - Total: ${totalValidated} place(s)`, 'success');
+        showScanResult(`✓ ${participant.nom} - ${validatedCount} événement(s) validé(s) - Total: ${totalValidated} place(s)`, 'success');
+    } else {
+        showScanResult(`${participant.nom} - Aucun événement en cours actuellement - Total validé: ${totalValidated} place(s)`, 'info');
     }
 }
 
@@ -9559,17 +9562,41 @@ function handleQRCodeResult(decodedText) {
         return;
     }
     
-    // Participant trouvé - fond vert
+    // Vérifier si TOUS les événements sont déjà validés
+    const allValidated = areAllEventsValidated(decodedText);
+    
+    if (allValidated) {
+        // Tous les événements déjà validés - fond rouge
+        setBackgroundFlash('error');
+        const validatedCount = countValidatedEvents(decodedText);
+        showScanResult(`⚠️ ${participant.nom} - Déjà validé (${validatedCount} place(s))`, 'error');
+        displayParticipant(decodedText);
+        return;
+    }
+    
+    // Participant trouvé avec événements à valider - fond vert
     setBackgroundFlash('success');
     
-    // Compter le nombre de places validées
-    const validatedCount = countValidatedEvents(decodedText);
-    
-    showScanResult(`✓ ${participant.nom} - ${validatedCount} place(s) validée(s)`, 'success');
+    // Afficher le participant
     displayParticipant(decodedText);
     
     // Auto-validation des événements en cours
     autoValidateCurrentEvents(decodedText);
+}
+
+// Nouvelle fonction pour vérifier si tous les événements sont déjà validés
+function areAllEventsValidated(participantId) {
+    const participant = participantsDatabase[participantId];
+    if (!participant) return false;
+    
+    for (let i = 0; i < participant.evenements.length; i++) {
+        const key = `${participantId}-${i}`;
+        const status = validationsData[key] || 'none';
+        if (status !== 'validated') {
+            return false; // Au moins un événement n'est pas validé
+        }
+    }
+    return true; // Tous les événements sont validés
 }
 
 // Nouvelle fonction pour compter les événements validés
