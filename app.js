@@ -8744,7 +8744,11 @@ const participantsDatabase = {
     "evenements": [
       {
         "nom": "Conference cloture",
-        "horaire": "Mardi 11h"
+        "horaire": "Samedi 17h"
+      },
+	   {
+        "nom": "Conference cloture",
+        "horaire": "Samedi 17h"
       }
     ]
   },
@@ -9364,33 +9368,33 @@ function parseScheduleAndCheck(horaire) {
 
 // Fonction pour valider automatiquement les événements en cours
 async function autoValidateCurrentEvents(participantId) {
-  const participant = participantsDatabase[participantId];
-  if (!participant) return;
-
-  let validatedCount = 0;
-
-  for (let i = 0; i < participant.evenements.length; i++) {
-    const event = participant.evenements[i];
-
-    // Vérifier si l'événement est en cours
-    if (parseScheduleAndCheck(event.horaire)) {
-      try {
-        const key = `${participantId}-${i}`;
-        const currentStatus = validationsData[key] || 'none';
-        if (currentStatus === 'none') {
-          await updateEventValidation(participantId, i, 'validated');
-          validatedCount++;
-          console.log(`Auto-validation: ${event.nom} - ${event.horaire}`);
+    const participant = participantsDatabase[participantId];
+    if (!participant) return;
+    
+    let validatedCount = 0;
+    for (let i = 0; i < participant.evenements.length; i++) {
+        const event = participant.evenements[i];
+        // Vérifier si l'événement est en cours
+        if (parseScheduleAndCheck(event.horaire)) {
+            try {
+                const key = `${participantId}-${i}`;
+                const currentStatus = validationsData[key] || 'none';
+                if (currentStatus === 'none') {
+                    await updateEventValidation(participantId, i, 'validated');
+                    validatedCount++;
+                    console.log(`Auto-validation: ${event.nom} - ${event.horaire}`);
+                }
+            } catch (error) {
+                console.error('Erreur lors de l\'auto-validation:', error);
+            }
         }
-      } catch (error) {
-        console.error('Erreur lors de l\'auto-validation:', error);
-      }
     }
-  }
-
-  if (validatedCount > 0) {
-    showScanResult(`${validatedCount} événement(s) validé(s) automatiquement`, 'success');
-  }
+    
+    if (validatedCount > 0) {
+        // Mettre à jour l'affichage avec le nouveau total
+        const totalValidated = countValidatedEvents(participantId);
+        showScanResult(`${validatedCount} événement(s) auto-validé(s) - Total: ${totalValidated} place(s)`, 'success');
+    }
 }
 
 
@@ -9546,12 +9550,79 @@ function handleFileUpload(event) {
 }
 
 function handleQRCodeResult(decodedText) {
-  showScanResult(`QR Code détecté: ${decodedText}`, 'success');
-  displayParticipant(decodedText);
-
-  // Auto-validation des événements en cours
-  autoValidateCurrentEvents(decodedText);
+    const participant = participantsDatabase[decodedText];
+    
+    if (!participant) {
+        // Participant non trouvé - fond rouge
+        setBackgroundFlash('error');
+        showScanResult(`QR Code non valide: ${decodedText}`, 'error');
+        return;
+    }
+    
+    // Participant trouvé - fond vert
+    setBackgroundFlash('success');
+    
+    // Compter le nombre de places validées
+    const validatedCount = countValidatedEvents(decodedText);
+    
+    showScanResult(`✓ ${participant.nom} - ${validatedCount} place(s) validée(s)`, 'success');
+    displayParticipant(decodedText);
+    
+    // Auto-validation des événements en cours
+    autoValidateCurrentEvents(decodedText);
 }
+
+// Nouvelle fonction pour compter les événements validés
+function countValidatedEvents(participantId) {
+    const participant = participantsDatabase[participantId];
+    if (!participant) return 0;
+    
+    let count = 0;
+    for (let i = 0; i < participant.evenements.length; i++) {
+        const key = `${participantId}-${i}`;
+        const status = validationsData[key] || 'none';
+        if (status === 'validated') {
+            count++;
+        }
+    }
+    return count;
+}
+
+// Nouvelle fonction pour le flash de fond d'écran
+function setBackgroundFlash(type) {
+    const body = document.body;
+    const originalBackground = body.style.backgroundColor;
+    
+    // Définir la couleur selon le type
+    if (type === 'success') {
+        body.style.backgroundColor = '#4CAF50'; // Vert
+    } else if (type === 'error') {
+        body.style.backgroundColor = '#f44336'; // Rouge
+    }
+    
+    // Créer un overlay pour un meilleur effet visuel
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = type === 'success' ? 'rgba(76, 175, 80, 0.8)' : 'rgba(244, 67, 54, 0.8)';
+    overlay.style.zIndex = '9999';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.transition = 'opacity 0.3s ease-out';
+    document.body.appendChild(overlay);
+    
+    // Retirer l'effet après 1 seconde
+    setTimeout(() => {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            body.style.backgroundColor = originalBackground;
+            document.body.removeChild(overlay);
+        }, 300);
+    }, 1000);
+}
+
 
 function showScanResult(message, type) {
   const resultDiv = document.getElementById('scan-result');
